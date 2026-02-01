@@ -1,12 +1,32 @@
 import 'dotenv/config';
 import { WebSocketServer, WebSocket } from 'ws';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { EventParser } from './event-parser.js';
 import { getSessions, getToolCalls } from './database.js';
-import { ClientCommand, ServerEvent } from './types.js';
+import { GatewayClient } from './gateway-client.js';
+import { ClientCommand, ServerEvent, RawGatewayEvent } from './types.js';
 
 const BRIDGE_PORT = parseInt(process.env.BRIDGE_PORT || '3001');
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'ws://127.0.0.1:18789';
-const GATEWAY_TOKEN = process.env.OPENCLAW_TOKEN;
+
+// Load token from credentials file or env
+function loadGatewayToken(): string {
+  // Try env first
+  if (process.env.OPENCLAW_TOKEN) {
+    return process.env.OPENCLAW_TOKEN;
+  }
+  
+  // Try credentials file
+  try {
+    const credsPath = resolve(process.env.HOME || '~', '.config/moltbook/credentials.json');
+    const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
+    return creds.api_key || creds.token || '';
+  } catch (err) {
+    console.warn('[Bridge] Could not load credentials file, using empty token');
+    return '';
+  }
+}
 
 // Store connected browser clients
 const clients: Set<WebSocket> = new Set();
@@ -23,6 +43,7 @@ wss.on('connection', (ws: WebSocket) => {
 
   // Send initial state
   sendSessions(ws);
+  sendGatewayStatus(ws);
 
   ws.on('message', (data: Buffer) => {
     try {
@@ -62,6 +83,10 @@ async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promi
       sendToClient(ws, { type: 'SESSIONS', data: sessions });
       break;
     
+    case 'GET_GATEWAY_STATUS':
+      sendGatewayStatus(ws);
+      break;
+    
     case 'PING':
       sendToClient(ws, { type: 'PONG' });
       break;
@@ -74,6 +99,17 @@ async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promi
 function sendSessions(ws: WebSocket): void {
   const sessions = getSessions(100);
   sendToClient(ws, { type: 'SESSIONS', data: sessions });
+}
+
+function sendGatewayStatus(ws: WebSocket): void {
+  sendToClient(ws, { 
+    type: 'GATEWAY_STATUS', 
+    data: { 
+      connected: gatewayClient?.isConnected() || false,
+      state: gatewayClient?.getConnectionState() || 'disconnected',
+      url: GATEWAY_URL
+    } 
+  });
 }
 
 function sendToClient(ws: WebSocket, event: ServerEvent): void {
@@ -92,119 +128,112 @@ export function broadcast(event: ServerEvent): void {
   });
 }
 
-// Simulate OpenClaw Gateway events for testing
-// In production, this would connect to actual Gateway
-function startGatewaySimulation(): void {
-  console.log('🎮 Starting Gateway simulation mode...');
+// Initialize Gateway Client
+const gatewayToken = loadGatewayToken();
+const gatewayClient = new GatewayClient({
+  url: GATEWAY_URL,
+  token: gatewayToken
+});
+
+// Handle Gateway events
+gatewayClient.on('connected', () => {
+  console.log('✅ Gateway connection established');
+  broadcast({ type: 'GATEWAY_STATUS', data: { connected: true, state: 'connected', url: GATEWAY_URL } });
+});
+
+gatewayClient.on('disconnected', (code, reason) => {
+  console.log(`⚠️ Gateway disconnected: ${code} ${reason}`);
+  broadcast({ type: 'GATEWAY_STATUS', data: { connected: false, state: 'disconnected', url: GATEWAY_URL } });
+});
+
+gatewayClient.on('error', (err) => {
+  console.error('Gateway client error:', err);
+});
+
+gatewayClient.on('event', (event: RawGatewayEvent) => {
+  // Parse and store the event
+  eventParser.parseEvent(event);
   
-  let sessionCounter = 0;
-  
-  setInterval(() => {
-    sessionCounter++;
-    const sessionId = `session_${Date.now()}`;
-    
-    // Simulate session start
-    eventParser.parseEvent({
-      type: 'session_start',
-      session_id: sessionId,
-      timestamp: new Date().toISOString(),
-      channel: 'telegram',
-      agent_id: 'main'
-    });
-    
-    broadcast({
-      type: 'SESSION_START',
-      data: {
-        id: sessionId,
-        name: `Test Session ${sessionCounter}`,
-        status: 'running',
-        startTime: new Date(),
-        totalTokensIn: 0,
-        totalTokensOut: 0,
-        estimatedCost: 0,
-        toolCalls: []
+  // Broadcast to browser clients
+  switch (event.type) {
+    case 'session_start':
+      const session = eventParser.getActiveSessions().find(s => s.id === event.session_id);
+      if (session) {
+        broadcast({ type: 'SESSION_START', data: session });
       }
-    });
+      break;
     
-    // Simulate some tool calls
-    const tools = ['exec', 'write', 'read', 'browser'];
-    tools.forEach((tool, i) => {
-      setTimeout(() => {
-        const callId = `call_${Date.now()}_${i}`;
-        
-        eventParser.parseEvent({
-          type: 'tool_call',
-          session_id: sessionId,
-          call_id: callId,
-          tool,
-          params: { command: `test ${tool}` },
-          timestamp: new Date().toISOString()
-        });
-        
-        broadcast({
-          type: 'TOOL_CALL',
-          sessionId,
-          data: {
-            id: callId,
-            sessionId,
-            toolName: tool,
-            parameters: { command: `test ${tool}` },
-            status: 'running',
-            startTime: new Date()
-          }
-        });
-        
-        // Simulate completion
-        setTimeout(() => {
-          eventParser.parseEvent({
-            type: 'tool_result',
-            session_id: sessionId,
-            call_id: callId,
-            status: 'success',
-            result: { output: `Result from ${tool}` },
-            timestamp: new Date().toISOString()
-          });
-          
-          broadcast({
-            type: 'TOOL_UPDATE',
-            sessionId,
-            data: {
-              id: callId,
-              status: 'success',
-              result: { output: `Result from ${tool}` },
-              endTime: new Date(),
-              durationMs: 100 + Math.random() * 500
-            }
-          });
-        }, 500 + Math.random() * 1000);
-        
-      }, i * 300);
-    });
-    
-    // Simulate session end
-    setTimeout(() => {
-      eventParser.parseEvent({
-        type: 'session_end',
-        session_id: sessionId,
-        status: 'success',
-        timestamp: new Date().toISOString()
+    case 'session_end':
+      broadcast({ 
+        type: 'SESSION_UPDATE', 
+        data: { 
+          id: event.session_id, 
+          status: event.status === 'error' ? 'failed' : 'completed',
+          endTime: new Date()
+        } 
       });
-      
+      break;
+    
+    case 'tool_call':
       broadcast({
-        type: 'SESSION_UPDATE',
+        type: 'TOOL_CALL',
+        sessionId: event.session_id,
         data: {
-          id: sessionId,
-          status: 'completed',
+          id: event.call_id,
+          sessionId: event.session_id,
+          toolName: event.tool || 'unknown',
+          parameters: event.params || {},
+          status: 'running',
+          startTime: new Date()
+        }
+      });
+      break;
+    
+    case 'tool_result':
+      broadcast({
+        type: 'TOOL_UPDATE',
+        sessionId: event.session_id,
+        data: {
+          id: event.call_id,
+          status: event.status === 'success' ? 'success' : 'error',
+          result: event.result,
+          error: event.error,
           endTime: new Date()
         }
       });
-    }, 5000);
+      break;
     
-  }, 15000); // New session every 15 seconds
-}
+    case 'model_usage':
+      // Model usage is handled internally by event parser
+      // Broadcast session update with new token counts
+      const activeSession = eventParser.getActiveSessions().find(s => s.id === event.session_id);
+      if (activeSession) {
+        broadcast({
+          type: 'SESSION_UPDATE',
+          data: {
+            id: event.session_id,
+            totalTokensIn: activeSession.totalTokensIn,
+            totalTokensOut: activeSession.totalTokensOut,
+            estimatedCost: activeSession.estimatedCost
+          }
+        });
+      }
+      break;
+  }
+});
+
+// Connect to Gateway
+console.log(`📡 Connecting to OpenClaw Gateway at ${GATEWAY_URL}...`);
+gatewayClient.connect();
 
 console.log(`✅ Bridge Server ready!`);
-console.log(`📡 WebSocket: ws://localhost:${BRIDGE_PORT}`);
+console.log(`🌐 WebSocket: ws://localhost:${BRIDGE_PORT}`);
 
-// Start simulation mode (replace with real Gateway connection later)
-startGatewaySimulation();
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n👋 Shutting down...');
+  gatewayClient.disconnect();
+  wss.close(() => {
+    process.exit(0);
+  });
+});
