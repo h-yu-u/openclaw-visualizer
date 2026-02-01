@@ -6,7 +6,7 @@ const BRIDGE_URL = import.meta.env.VITE_BRIDGE_URL || 'ws://localhost:3001';
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const store = useTaskStore();
 
   const connect = useCallback(() => {
@@ -20,6 +20,7 @@ export function useWebSocket() {
         console.log('Connected to Bridge Server');
         store.setConnectionStatus('connected');
         ws.send(JSON.stringify({ type: 'GET_SESSIONS' }));
+        ws.send(JSON.stringify({ type: 'GET_GATEWAY_STATUS' }));
       };
 
       ws.onmessage = (event) => {
@@ -56,6 +57,17 @@ export function useWebSocket() {
     };
   }, [connect]);
 
+  // Fetch tool calls when session selection changes
+  useEffect(() => {
+    const { selectedSessionId } = store;
+    if (selectedSessionId && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ 
+        type: 'GET_TOOL_CALLS', 
+        sessionId: selectedSessionId 
+      }));
+    }
+  }, [store.selectedSessionId]);
+
   const send = useCallback((message: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
@@ -69,6 +81,16 @@ function handleServerMessage(msg: any, store: any) {
   switch (msg.type) {
     case 'SESSIONS':
       store.setSessions(msg.data.map(parseSession));
+      // Also fetch tool calls for selected session if any
+      if (store.selectedSessionId) {
+        const ws = store._wsRef?.current;
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ 
+            type: 'GET_TOOL_CALLS', 
+            sessionId: store.selectedSessionId 
+          }));
+        }
+      }
       break;
     
     case 'SESSION_START':
@@ -84,6 +106,10 @@ function handleServerMessage(msg: any, store: any) {
     
     case 'TOOL_CALLS':
       // Store tool calls for the session
+      if (msg.sessionId && msg.data) {
+        const calls = msg.data.map(parseToolCall);
+        store.setToolCalls(msg.sessionId, calls);
+      }
       break;
     
     case 'TOOL_CALL':
@@ -95,6 +121,10 @@ function handleServerMessage(msg: any, store: any) {
         ...msg.data,
         endTime: msg.data.endTime ? new Date(msg.data.endTime) : undefined
       });
+      break;
+
+    case 'GATEWAY_STATUS':
+      store.setGatewayStatus(msg.data);
       break;
   }
 }

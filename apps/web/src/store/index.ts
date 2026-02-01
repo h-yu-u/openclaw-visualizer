@@ -8,16 +8,19 @@ interface TaskStore {
   toolCalls: Record<string, ToolCall[]>;
   connectionStatus: ConnectionStatus;
   activeTab: TabType;
+  gatewayStatus: { connected: boolean; state: string; url: string } | null;
 
   // Actions
   setSessions: (sessions: TaskSession[]) => void;
   addSession: (session: TaskSession) => void;
   updateSession: (id: string, updates: Partial<TaskSession>) => void;
   selectSession: (id: string | null) => void;
+  setToolCalls: (sessionId: string, calls: ToolCall[]) => void;
   addToolCall: (sessionId: string, call: ToolCall) => void;
   updateToolCall: (sessionId: string, callId: string, updates: Partial<ToolCall>) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setActiveTab: (tab: TabType) => void;
+  setGatewayStatus: (status: { connected: boolean; state: string; url: string } | null) => void;
 
   // Selectors
   getSelectedSession: () => TaskSession | undefined;
@@ -31,6 +34,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   toolCalls: {},
   connectionStatus: 'disconnected',
   activeTab: 'overview',
+  gatewayStatus: null,
 
   setSessions: (sessions) => set({ sessions }),
 
@@ -45,6 +49,13 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   })),
 
   selectSession: (id) => set({ selectedSessionId: id }),
+
+  setToolCalls: (sessionId, calls) => set((state) => ({
+    toolCalls: {
+      ...state.toolCalls,
+      [sessionId]: calls
+    }
+  })),
 
   addToolCall: (sessionId, call) => set((state) => ({
     toolCalls: {
@@ -64,6 +75,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setActiveTab: (tab) => set({ activeTab: tab }),
+  setGatewayStatus: (status) => set({ gatewayStatus: status }),
 
   getSelectedSession: () => {
     const { sessions, selectedSessionId } = get();

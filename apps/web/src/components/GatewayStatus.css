@@ -1,0 +1,53 @@
+/* GatewayStatus styles */
+.gateway-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.gateway-status .status-label {
+  white-space: nowrap;
+}
+
+.gateway-status .status-url {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  margin-left: 4px;
+  border-left: 1px solid currentColor;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.status-connected {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-connecting {
+  background-color: rgba(34, 211, 238, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(34, 211, 238, 0.3);
+}
+
+.status-disconnected {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

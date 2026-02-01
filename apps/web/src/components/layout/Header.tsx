@@ -1,38 +1,19 @@
 import React from 'react';
 import { useTaskStore } from '../../store';
-import { Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { GatewayStatus } from '../GatewayStatus';
 import './Header.css';
 
 export function Header() {
-  const { connectionStatus, sessions, getRunningSessions } = useTaskStore();
+  const { connectionStatus, sessions, getRunningSessions, gatewayStatus } = useTaskStore();
   const runningCount = getRunningSessions().length;
-
-  const getStatusIcon = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return <Wifi className="status-icon connected" size={18} />;
-      case 'connecting':
-        return <Loader2 className="status-icon connecting" size={18} />;
-      default:
-        return <WifiOff className="status-icon disconnected" size={18} />;
-    }
-  };
-
-  const getStatusText = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return 'Live';
-      case 'connecting':
-        return 'Connecting...';
-      default:
-        return 'Disconnected';
-    }
-  };
 
   return (
     <header className="header">
       <div className="header-left">
-        <h1>OpenClaw Visualizer</h1>
+        <div className="logo">
+          <div className="logo-icon">⚡</div>
+          <h1>OpenClaw Visualizer</h1>
+        </div>
       </div>
       
       <div className="header-center">
@@ -51,9 +32,13 @@ export function Header() {
       </div>
       
       <div className="header-right">
-        <div className={`connection-status ${connectionStatus}`}>
-          {getStatusIcon()}
-          <span>{getStatusText()}</span>
+        <div className="status-group">
+          {gatewayStatus && (
+            <GatewayStatus 
+              status={gatewayStatus.state as any} 
+              gatewayUrl={gatewayStatus.url}
+            />
+          )}
         </div>
       </div>
     </header>
