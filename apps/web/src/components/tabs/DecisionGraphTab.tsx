@@ -144,9 +144,10 @@ export function DecisionGraphTab({ session, toolCalls = [] }: Props) {
       const col = index % itemsPerRow;
       const x = 100 + col * rowWidth;
       const y = 100 + row * rowHeight;
+      const nodeId = `${call.id}-${index}`;
 
       flowNodes.push({
-        id: call.id,
+        id: nodeId,
         type: 'tool',
         position: { x, y },
         data: {
@@ -160,17 +161,18 @@ export function DecisionGraphTab({ session, toolCalls = [] }: Props) {
       // Connect to previous node
       if (index === 0) {
         flowEdges.push({
-          id: `e-start-${call.id}`,
+          id: `e-start-${nodeId}`,
           source: 'start',
-          target: call.id,
+          target: nodeId,
           animated: call.status === 'running',
           style: { stroke: '#64748b' }
         });
       } else {
+        const prevNodeId = `${sortedCalls[index - 1].id}-${index - 1}`;
         flowEdges.push({
-          id: `e-${sortedCalls[index - 1].id}-${call.id}`,
-          source: sortedCalls[index - 1].id,
-          target: call.id,
+          id: `e-${prevNodeId}-${nodeId}`,
+          source: prevNodeId,
+          target: nodeId,
           animated: call.status === 'running',
           style: { stroke: '#64748b' }
         });
@@ -196,9 +198,10 @@ export function DecisionGraphTab({ session, toolCalls = [] }: Props) {
 
     // Connect last tool to end
     if (sortedCalls.length > 0) {
+      const lastNodeId = `${sortedCalls[sortedCalls.length - 1].id}-${sortedCalls.length - 1}`;
       flowEdges.push({
-        id: `e-${sortedCalls[sortedCalls.length - 1].id}-end`,
-        source: sortedCalls[sortedCalls.length - 1].id,
+        id: `e-${lastNodeId}-end`,
+        source: lastNodeId,
         target: 'end',
         animated: session.status === 'running',
         style: { 

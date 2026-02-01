@@ -40,6 +40,9 @@
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Empty State */

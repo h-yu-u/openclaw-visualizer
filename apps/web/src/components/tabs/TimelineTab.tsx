@@ -32,6 +32,13 @@ const TOOL_COLORS: Record<string, string> = {
   canvas: '#84cc16'
 };
 
+// Helper function moved outside component
+const formatDuration = (ms: number) => {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60000).toFixed(1)}m`;
+};
+
 export function TimelineTab({ session, toolCalls = [] }: Props) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState(0);
@@ -100,12 +107,6 @@ export function TimelineTab({ session, toolCalls = [] }: Props) {
     }
     return markers;
   }, [totalDuration]);
-
-  const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${(ms / 60000).toFixed(1)}m`;
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -210,14 +211,14 @@ export function TimelineTab({ session, toolCalls = [] }: Props) {
 
               {/* Bars */}
               <div className="gantt-bars">
-                {ganttItems.map(item => {
+                {ganttItems.map((item, index) => {
                   const left = item.startOffset * pixelsPerMs;
                   const width = Math.max(4, item.duration * pixelsPerMs);
                   const top = item.row * 50 + 10;
 
                   return (
                     <div
-                      key={item.id}
+                      key={`${item.id}-${index}`}
                       className="gantt-bar"
                       style={{
                         left,

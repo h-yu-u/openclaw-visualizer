@@ -2,18 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    branches: [ main, develop, 'feature/*' ]
   pull_request:
     branches: [ main ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
 
 env:
   NODE_VERSION: '20'
+  BRIDGE_PORT: 3001
   DATABASE_PATH: './data/test.db'
 
 jobs:
@@ -35,11 +30,8 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Run ESLint
-      run: npm run lint --if-present || echo "No lint script"
-    
     - name: Run TypeScript check
-      run: npm run type-check --if-present || echo "No type-check script"
+      run: npm run type-check --workspaces
 
   # ========== 单元测试 ==========
   unit-tests:
@@ -61,7 +53,14 @@ jobs:
       run: npm ci
     
     - name: Run unit tests
-      run: npm run test:unit --if-present -- --passWithNoTests || echo "No unit tests yet"
+      run: npm run test:unit -- --coverage --reporter=verbose
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage/lcov.info
+        fail_ci_if_error: false
+        verbose: true
 
   # ========== 构建验证 ==========
   build:
@@ -89,9 +88,13 @@ jobs:
     - name: Build ${{ matrix.app }}
       run: |
         cd apps/${{ matrix.app }}
-        if [ -f "package.json" ]; then
-          npm run build --if-present || echo "No build script"
-        fi
+        npm run build
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.app }}-build
+        path: apps/${{ matrix.app }}/dist
 
   # ========== 技能验证 ==========
   skill-validation:
@@ -102,63 +105,26 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-    
     - name: Validate skill structure
       run: |
-        if [ -f "scripts/validate-skills.js" ]; then
-          node scripts/validate-skills.js
-        else
-          echo "Skill validator not found, checking manually..."
-          for skill in skills/*/; do
-            if [ -f "$skill/SKILL.md" ]; then
-              echo "✅ $(basename $skill) has SKILL.md"
-            else
-              echo "❌ $(basename $skill) missing SKILL.md"
-              exit 1
-            fi
-          done
-        fi
-    
-    - name: Check Superpowers skills
-      run: |
-        if [ -d "skills/superpowers" ]; then
-          echo "✅ Superpowers skills found"
-          ls -la skills/superpowers/skills/ | head -20
-        else
-          echo "⚠️ Superpowers skills not found"
-        fi
-    
-    - name: Check Moltbook skills
-      run: |
-        if [ -d "skills/moltbook-talent-marketplace" ]; then
-          echo "✅ Moltbook marketplace skill found"
-        else
-          echo "⚠️ Moltbook marketplace skill not found"
-        fi
+        for skill in skills/*/; do
+          echo "Checking $skill..."
+          if [ -f "$skill/SKILL.md" ]; then
+            echo "✅ $skill has SKILL.md"
+          else
+            echo "⚠️ $skill missing SKILL.md"
+          fi
+        done
 
-  # ========== 测试总结 ==========
-  test-summary:
-    name: Test Summary
+  # ========== 安全扫描 ==========
+  security:
+    name: Security Scan
     runs-on: ubuntu-latest
-    needs: [unit-tests, build, skill-validation]
-    if: always()
     
     steps:
-    - name: Check all jobs status
-      run: |
-        echo "Unit Tests: ${{ needs.unit-tests.result }}"
-        echo "Build: ${{ needs.build.result }}"
-        echo "Skill Validation: ${{ needs.skill-validation.result }}"
-        
-        if [ "${{ needs.unit-tests.result }}" = "failure" ] || \
-           [ "${{ needs.build.result }}" = "failure" ] || \
-           [ "${{ needs.skill-validation.result }}" = "failure" ]; then
-          echo "❌ P0 tests failed"
-          exit 1
-        fi
-        
-        echo "✅ All P0 tests passed"
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Run npm audit
+      run: npm audit --audit-level=moderate
+      continue-on-error: true

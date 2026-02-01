@@ -187,6 +187,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
 }
 
 .empty-logs {
@@ -220,7 +221,7 @@
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  overflow: hidden;
+  overflow: visible;
   animation: fadeIn 0.3s ease-out;
 }
 
@@ -310,18 +311,16 @@
 .log-details {
   border-top: 1px solid var(--border-color);
   padding: 16px;
-  animation: slideDown 0.2s ease-out;
+  overflow: visible;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 2000px;
-  }
+.log-section {
+  margin-bottom: 20px;
+  overflow: visible;
+}
+
+.log-section:last-child {
+  margin-bottom: 0;
 }
 
 .log-section {
@@ -383,8 +382,11 @@
   font-size: 12px;
   line-height: 1.6;
   overflow-x: auto;
+  overflow-y: visible;
   margin: 0;
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  min-height: 50px;
+  max-height: none;
 }
 
 .json-key {

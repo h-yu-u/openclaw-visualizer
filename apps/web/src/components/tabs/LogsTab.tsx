@@ -15,14 +15,18 @@ type FilterStatus = 'all' | 'success' | 'error' | 'running';
 
 // Syntax highlighter for JSON
 function SyntaxHighlightedJSON({ data }: { data: any }) {
+  if (data === undefined || data === null) {
+    return <pre className="syntax-highlighted"><span className="json-null">null</span></pre>;
+  }
+  
   const jsonString = JSON.stringify(data, null, 2);
   
   const highlighted = jsonString
-    .replace(/"([^"]+)":/g, '<span class="json-key"\u003e"$1":</span>')
-    .replace(/: "([^"]*)"/g, ': <span class="json-string"\u003e"$1"</span>')
-    .replace(/: (\d+)/g, ': <span class="json-number"\u003e$1</span>')
-    .replace(/: (true|false)/g, ': <span class="json-boolean"\u003e$1</span>')
-    .replace(/: (null)/g, ': <span class="json-null"\u003e$1</span>');
+    .replace(/"([^"]+)":/g, '<span class="json-key">"$1":</span>')
+    .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+    .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+    .replace(/: (null)/g, ': <span class="json-null">$1</span>');
 
   return (
     <pre 
@@ -241,7 +245,7 @@ export function LogsTab({ session, toolCalls = [] }: Props) {
         ) : (
           filteredCalls.map((call, index) => (
             <div 
-              key={call.id} 
+              key={`${call.id}-${index}-${call.toolName}`}
               className={`log-item ${call.status} ${expandedCalls.has(call.id) ? 'expanded' : ''}`}
               style={{ animationDelay: `${index * 30}ms` }}
             >

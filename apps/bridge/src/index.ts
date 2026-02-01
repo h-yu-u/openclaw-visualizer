@@ -2,35 +2,21 @@ import 'dotenv/config';
 import { WebSocketServer, WebSocket } from 'ws';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { EventParser } from './event-parser.js';
-import { getSessions, getToolCalls } from './database.js';
-import { GatewayClient } from './gateway-client.js';
-import { ClientCommand, ServerEvent, RawGatewayEvent } from './types.js';
+import { DatabaseManager } from './database.js';
+import { OpenClawFileWatcher, SessionData, ToolCallData } from './file-watcher.js';
+import { ClientCommand, ServerEvent } from './types.js';
 
 const BRIDGE_PORT = parseInt(process.env.BRIDGE_PORT || '3001');
-const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'ws://127.0.0.1:18789';
+const DB_PATH = process.env.DATABASE_PATH || './data/visualizer.db';
 
-// Load token from credentials file or env
-function loadGatewayToken(): string {
-  // Try env first
-  if (process.env.OPENCLAW_TOKEN) {
-    return process.env.OPENCLAW_TOKEN;
-  }
-  
-  // Try credentials file
-  try {
-    const credsPath = resolve(process.env.HOME || '~', '.config/moltbook/credentials.json');
-    const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
-    return creds.api_key || creds.token || '';
-  } catch (err) {
-    console.warn('[Bridge] Could not load credentials file, using empty token');
-    return '';
-  }
-}
+// Initialize database
+const db = new DatabaseManager(DB_PATH);
 
 // Store connected browser clients
 const clients: Set<WebSocket> = new Set();
-const eventParser = new EventParser();
+
+// Initialize File Watcher
+const fileWatcher = new OpenClawFileWatcher();
 
 // WebSocket Server for browsers
 const wss = new WebSocketServer({ port: BRIDGE_PORT });
@@ -43,7 +29,6 @@ wss.on('connection', (ws: WebSocket) => {
 
   // Send initial state
   sendSessions(ws);
-  sendGatewayStatus(ws);
 
   ws.on('message', (data: Buffer) => {
     try {
@@ -64,6 +49,94 @@ wss.on('connection', (ws: WebSocket) => {
   });
 });
 
+// Handle file watcher events
+fileWatcher.on('session_start', (session: SessionData) => {
+  console.log('[Bridge] Session started:', session.id);
+  
+  // Save to database
+  db.createSession({
+    id: session.id,
+    name: session.name,
+    status: session.status,
+    startTime: new Date(session.startTime),
+    totalTokensIn: session.totalTokensIn,
+    totalTokensOut: session.totalTokensOut,
+    estimatedCost: session.estimatedCost
+  });
+
+  // Broadcast to clients
+  broadcast({ 
+    type: 'SESSION_START', 
+    data: convertSession(session) 
+  });
+});
+
+fileWatcher.on('session_update', (session: SessionData) => {
+  // Update database
+  db.updateSession(session.id, {
+    status: session.status,
+    endTime: session.endTime ? new Date(session.endTime) : undefined,
+    totalTokensIn: session.totalTokensIn,
+    totalTokensOut: session.totalTokensOut,
+    estimatedCost: session.estimatedCost
+  });
+
+  // Broadcast to clients
+  broadcast({ 
+    type: 'SESSION_UPDATE', 
+    data: {
+      id: session.id,
+      status: session.status,
+      endTime: session.endTime ? new Date(session.endTime) : undefined,
+      totalTokensIn: session.totalTokensIn,
+      totalTokensOut: session.totalTokensOut,
+      estimatedCost: session.estimatedCost
+    }
+  });
+});
+
+fileWatcher.on('tool_call', ({ sessionId, toolCall }: { sessionId: string; toolCall: ToolCallData }) => {
+  // Save to database
+  db.createToolCall({
+    id: toolCall.id,
+    sessionId,
+    toolName: toolCall.toolName,
+    status: toolCall.status,
+    startTime: new Date(toolCall.startTime),
+    parameters: toolCall.parameters
+  });
+
+  // Broadcast to clients
+  broadcast({
+    type: 'TOOL_CALL',
+    sessionId,
+    data: convertToolCall(toolCall, sessionId)
+  });
+});
+
+fileWatcher.on('tool_update', ({ sessionId, toolCall }: { sessionId: string; toolCall: ToolCallData }) => {
+  // Update database
+  db.updateToolCall(toolCall.id, sessionId, {
+    status: toolCall.status,
+    endTime: toolCall.endTime ? new Date(toolCall.endTime) : undefined,
+    result: toolCall.result,
+    error: toolCall.error
+  });
+
+  // Broadcast to clients
+  broadcast({
+    type: 'TOOL_UPDATE',
+    sessionId,
+    data: {
+      id: toolCall.id,
+      status: toolCall.status,
+      endTime: toolCall.endTime ? new Date(toolCall.endTime) : undefined,
+      result: toolCall.result,
+      error: toolCall.error
+    }
+  });
+});
+
 // Handle commands from browser clients
 async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promise<void> {
   switch (command.type) {
@@ -73,18 +146,25 @@ async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promi
     
     case 'GET_TOOL_CALLS':
       if (command.sessionId) {
-        const calls = getToolCalls(command.sessionId);
+        const calls = db.getToolCalls(command.sessionId);
         sendToClient(ws, { type: 'TOOL_CALLS', sessionId: command.sessionId, data: calls });
       }
       break;
     
     case 'GET_HISTORY':
-      const sessions = getSessions(command.limit || 100);
+      const sessions = db.getSessions(command.limit || 100);
       sendToClient(ws, { type: 'SESSIONS', data: sessions });
       break;
     
     case 'GET_GATEWAY_STATUS':
-      sendGatewayStatus(ws);
+      sendToClient(ws, { 
+        type: 'GATEWAY_STATUS', 
+        data: { 
+          connected: true,
+          state: 'file_watcher',
+          url: 'filesystem'
+        } 
+      });
       break;
     
     case 'PING':
@@ -97,19 +177,15 @@ async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promi
 }
 
 function sendSessions(ws: WebSocket): void {
-  const sessions = getSessions(100);
+  // Get sessions from file watcher (has live tool calls data)
+  const fileSessions = fileWatcher.getSessions();
+  
+  // Convert and sort sessions
+  const sessions = fileSessions.map(convertSession).sort((a, b) => 
+    new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+  );
+  
   sendToClient(ws, { type: 'SESSIONS', data: sessions });
-}
-
-function sendGatewayStatus(ws: WebSocket): void {
-  sendToClient(ws, { 
-    type: 'GATEWAY_STATUS', 
-    data: { 
-      connected: gatewayClient?.isConnected() || false,
-      state: gatewayClient?.getConnectionState() || 'disconnected',
-      url: GATEWAY_URL
-    } 
-  });
 }
 
 function sendToClient(ws: WebSocket, event: ServerEvent): void {
@@ -119,7 +195,7 @@ function sendToClient(ws: WebSocket, event: ServerEvent): void {
 }
 
 // Broadcast to all connected clients
-export function broadcast(event: ServerEvent): void {
+function broadcast(event: ServerEvent): void {
   const message = JSON.stringify(event);
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -128,111 +204,50 @@ export function broadcast(event: ServerEvent): void {
   });
 }
 
-// Initialize Gateway Client
-const gatewayToken = loadGatewayToken();
-const gatewayClient = new GatewayClient({
-  url: GATEWAY_URL,
-  token: gatewayToken
-});
+// Helper functions
+function convertSession(session: SessionData): any {
+  return {
+    id: session.id,
+    name: session.name,
+    status: session.status,
+    startTime: new Date(session.startTime),
+    endTime: session.endTime ? new Date(session.endTime) : undefined,
+    totalTokensIn: session.totalTokensIn,
+    totalTokensOut: session.totalTokensOut,
+    estimatedCost: session.estimatedCost,
+    agentId: session.agentId,
+    channel: session.channel,
+    toolCalls: session.toolCalls.map(tc => convertToolCall(tc, session.id))
+  };
+}
 
-// Handle Gateway events
-gatewayClient.on('connected', () => {
-  console.log('✅ Gateway connection established');
-  broadcast({ type: 'GATEWAY_STATUS', data: { connected: true, state: 'connected', url: GATEWAY_URL } });
-});
+function convertToolCall(tc: ToolCallData, sessionId: string): any {
+  return {
+    id: tc.id,
+    sessionId,
+    toolName: tc.toolName,
+    status: tc.status,
+    startTime: new Date(tc.startTime),
+    endTime: tc.endTime ? new Date(tc.endTime) : undefined,
+    input: tc.parameters,
+    output: tc.result,
+    error: tc.error,
+    tokensIn: tc.tokensIn,
+    tokensOut: tc.tokensOut
+  };
+}
 
-gatewayClient.on('disconnected', (code, reason) => {
-  console.log(`⚠️ Gateway disconnected: ${code} ${reason}`);
-  broadcast({ type: 'GATEWAY_STATUS', data: { connected: false, state: 'disconnected', url: GATEWAY_URL } });
-});
-
-gatewayClient.on('error', (err) => {
-  console.error('Gateway client error:', err);
-});
-
-gatewayClient.on('event', (event: RawGatewayEvent) => {
-  // Parse and store the event
-  eventParser.parseEvent(event);
-  
-  // Broadcast to browser clients
-  switch (event.type) {
-    case 'session_start':
-      const session = eventParser.getActiveSessions().find(s => s.id === event.session_id);
-      if (session) {
-        broadcast({ type: 'SESSION_START', data: session });
-      }
-      break;
-    
-    case 'session_end':
-      broadcast({ 
-        type: 'SESSION_UPDATE', 
-        data: { 
-          id: event.session_id, 
-          status: event.status === 'error' ? 'failed' : 'completed',
-          endTime: new Date()
-        } 
-      });
-      break;
-    
-    case 'tool_call':
-      broadcast({
-        type: 'TOOL_CALL',
-        sessionId: event.session_id,
-        data: {
-          id: event.call_id,
-          sessionId: event.session_id,
-          toolName: event.tool || 'unknown',
-          parameters: event.params || {},
-          status: 'running',
-          startTime: new Date()
-        }
-      });
-      break;
-    
-    case 'tool_result':
-      broadcast({
-        type: 'TOOL_UPDATE',
-        sessionId: event.session_id,
-        data: {
-          id: event.call_id,
-          status: event.status === 'success' ? 'success' : 'error',
-          result: event.result,
-          error: event.error,
-          endTime: new Date()
-        }
-      });
-      break;
-    
-    case 'model_usage':
-      // Model usage is handled internally by event parser
-      // Broadcast session update with new token counts
-      const activeSession = eventParser.getActiveSessions().find(s => s.id === event.session_id);
-      if (activeSession) {
-        broadcast({
-          type: 'SESSION_UPDATE',
-          data: {
-            id: event.session_id,
-            totalTokensIn: activeSession.totalTokensIn,
-            totalTokensOut: activeSession.totalTokensOut,
-            estimatedCost: activeSession.estimatedCost
-          }
-        });
-      }
-      break;
-  }
-});
-
-// Connect to Gateway
-console.log(`📡 Connecting to OpenClaw Gateway at ${GATEWAY_URL}...`);
-gatewayClient.connect();
+// Start file watcher
+fileWatcher.start();
 
 console.log(`✅ Bridge Server ready!`);
 console.log(`🌐 WebSocket: ws://localhost:${BRIDGE_PORT}`);
+console.log(`📁 Watching OpenClaw sessions...`);
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n👋 Shutting down...');
-  gatewayClient.disconnect();
+  fileWatcher.stop();
   wss.close(() => {
     process.exit(0);
   });

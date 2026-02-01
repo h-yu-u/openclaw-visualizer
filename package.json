@@ -11,10 +11,25 @@
     "dev:bridge": "npm run dev -w apps/bridge",
     "dev:web": "npm run dev -w apps/web",
     "build": "npm run build -w apps/web",
-    "test": "npm test --workspaces"
+    "test": "npm run test:unit",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "type-check": "npm run type-check --workspaces",
+    "ci:local": "bash scripts/run-tests.sh",
+    "ci:p0": "bash scripts/run-tests.sh | grep -E '(P0|FAILED|PASSED)'",
+    "lint": "echo 'No linter configured'",
+    "format:check": "echo 'No formatter configured'"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.1",
+    "@vitest/coverage-v8": "^1.3.1",
+    "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
-    "typescript": "^5.3.3"
+    "jsdom": "^24.0.0",
+    "playwright": "^1.42.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.1"
   }
 }

@@ -7,51 +7,93 @@ const BRIDGE_URL = import.meta.env.VITE_BRIDGE_URL || 'ws://localhost:3001';
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const store = useTaskStore();
+  const isActiveRef = useRef(true);
+  
+  // Use selectors to get specific actions, not the whole store
+  const setConnectionStatus = useTaskStore(state => state.setConnectionStatus);
+  const setSessions = useTaskStore(state => state.setSessions);
+  const addSession = useTaskStore(state => state.addSession);
+  const updateSession = useTaskStore(state => state.updateSession);
+  const setToolCalls = useTaskStore(state => state.setToolCalls);
+  const addToolCall = useTaskStore(state => state.addToolCall);
+  const updateToolCall = useTaskStore(state => state.updateToolCall);
+  const setGatewayStatus = useTaskStore(state => state.setGatewayStatus);
+  const selectedSessionId = useTaskStore(state => state.selectedSessionId);
 
   const connect = useCallback(() => {
-    store.setConnectionStatus('connecting');
+    if (!isActiveRef.current) return;
+    
+    setConnectionStatus('connecting');
 
     try {
       const ws = new WebSocket(BRIDGE_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (!isActiveRef.current) {
+          ws.close();
+          return;
+        }
         console.log('Connected to Bridge Server');
-        store.setConnectionStatus('connected');
+        setConnectionStatus('connected');
         ws.send(JSON.stringify({ type: 'GET_SESSIONS' }));
         ws.send(JSON.stringify({ type: 'GET_GATEWAY_STATUS' }));
       };
 
       ws.onmessage = (event) => {
+        if (!isActiveRef.current) return;
         try {
           const msg = JSON.parse(event.data);
-          handleServerMessage(msg, store);
+          handleServerMessage(msg, {
+            setSessions,
+            addSession,
+            updateSession,
+            setToolCalls,
+            addToolCall,
+            updateToolCall,
+            setGatewayStatus,
+            selectedSessionId,
+            wsRef
+          });
         } catch (err) {
           console.error('Failed to parse message:', err);
         }
       };
 
       ws.onclose = () => {
+        if (!isActiveRef.current) return;
         console.log('Disconnected from Bridge Server');
-        store.setConnectionStatus('disconnected');
+        setConnectionStatus('disconnected');
         reconnectTimeoutRef.current = setTimeout(connect, 3000);
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        store.setConnectionStatus('disconnected');
+        if (!isActiveRef.current) return;
+        // Silent error - connection failures are expected during reconnect
       };
     } catch (err) {
+      if (!isActiveRef.current) return;
       console.error('Failed to connect:', err);
-      store.setConnectionStatus('disconnected');
+      setConnectionStatus('disconnected');
       reconnectTimeoutRef.current = setTimeout(connect, 3000);
     }
-  }, [store]);
+  }, [
+    setConnectionStatus,
+    setSessions,
+    addSession,
+    updateSession,
+    setToolCalls,
+    addToolCall,
+    updateToolCall,
+    setGatewayStatus,
+    selectedSessionId
+  ]);
 
   useEffect(() => {
+    isActiveRef.current = true;
     connect();
     return () => {
+      isActiveRef.current = false;
       clearTimeout(reconnectTimeoutRef.current);
       wsRef.current?.close();
     };
@@ -59,14 +101,13 @@ export function useWebSocket() {
 
   // Fetch tool calls when session selection changes
   useEffect(() => {
-    const { selectedSessionId } = store;
     if (selectedSessionId && wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ 
         type: 'GET_TOOL_CALLS', 
         sessionId: selectedSessionId 
       }));
     }
-  }, [store.selectedSessionId]);
+  }, [selectedSessionId]);
 
   const send = useCallback((message: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -74,23 +115,14 @@ export function useWebSocket() {
     }
   }, []);
 
-  return { send, status: store.connectionStatus };
+  const connectionStatus = useTaskStore(state => state.connectionStatus);
+  return { send, status: connectionStatus };
 }
 
 function handleServerMessage(msg: any, store: any) {
   switch (msg.type) {
     case 'SESSIONS':
       store.setSessions(msg.data.map(parseSession));
-      // Also fetch tool calls for selected session if any
-      if (store.selectedSessionId) {
-        const ws = store._wsRef?.current;
-        if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ 
-            type: 'GET_TOOL_CALLS', 
-            sessionId: store.selectedSessionId 
-          }));
-        }
-      }
       break;
     
     case 'SESSION_START':
@@ -105,7 +137,6 @@ function handleServerMessage(msg: any, store: any) {
       break;
     
     case 'TOOL_CALLS':
-      // Store tool calls for the session
       if (msg.sessionId && msg.data) {
         const calls = msg.data.map(parseToolCall);
         store.setToolCalls(msg.sessionId, calls);

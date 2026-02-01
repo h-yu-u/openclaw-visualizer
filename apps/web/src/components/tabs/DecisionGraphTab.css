@@ -1,8 +1,10 @@
 /* DecisionGraphTab styles */
+.graph-tab,
 .decision-graph-tab {
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 400px;
 }
 
 .graph-header {
@@ -37,6 +39,8 @@
   overflow: hidden;
   border: 1px solid var(--border-color);
   background-color: var(--bg-primary);
+  height: 600px;
+  min-height: 600px;
 }
 
 /* React Flow Customization */

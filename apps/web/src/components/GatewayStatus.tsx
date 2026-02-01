@@ -49,7 +49,13 @@ export function GatewayStatus({ status, gatewayUrl }: Props) {
       {gatewayUrl && (
         <span className="status-url" title={gatewayUrl}>
           <Server size={12} />
-          {new URL(gatewayUrl).host}
+          {(() => {
+            try {
+              return new URL(gatewayUrl).host;
+            } catch {
+              return gatewayUrl === 'filesystem' ? 'File Watcher' : gatewayUrl.slice(0, 20);
+            }
+          })()}
         </span>
       )}
     </div>
