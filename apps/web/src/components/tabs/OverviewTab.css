@@ -1,0 +1,108 @@
+/* OverviewTab styles */
+.overview-tab {
+  max-width: 1200px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.stat-card.blue { border-left: 4px solid var(--info); }
+.stat-card.green { border-left: 4px solid var(--success); }
+.stat-card.purple { border-left: 4px solid #a855f7; }
+.stat-card.orange { border-left: 4px solid var(--warning); }
+.stat-card.cyan { border-left: 4px solid var(--running); }
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-tertiary);
+}
+
+.stat-card.blue .stat-icon { color: var(--info); }
+.stat-card.green .stat-icon { color: var(--success); }
+.stat-card.purple .stat-icon { color: #a855f7; }
+.stat-card.orange .stat-icon { color: var(--warning); }
+.stat-card.cyan .stat-icon { color: var(--running); }
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.session-details {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.session-details h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.detail-row {
+  display: flex;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row .label {
+  width: 120px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.detail-row .value {
+  flex: 1;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: monospace;
+}
+
+.status-running { color: var(--running); }
+.status-completed { color: var(--success); }
+.status-failed { color: var(--error); }
+.status-cancelled { color: var(--text-muted); }
