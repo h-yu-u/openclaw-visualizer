@@ -1,20 +1,16 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
+import { TaskSession, ToolCall } from '../../types';
 import {
   ReactFlow,
-  MiniMap,
-  Controls,
   Background,
-  useNodesState,
-  useEdgesState,
+  Controls,
+  MiniMap,
   Node,
   Edge,
   Position,
-  Handle,
-  Panel
+  Handle
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { TaskSession, ToolCall } from '../../types';
-import { GitBranch, Cpu, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
 import './DecisionGraphTab.css';
 
 interface Props {
@@ -22,203 +18,237 @@ interface Props {
   toolCalls?: ToolCall[];
 }
 
-// Custom node components
-function StartNode({ data }: { data: any }) {
-  return (
-    <div className="node start-node">
-      <Handle type="source" position={Position.Bottom} />
-      <PlayCircle size={20} />
-      <span>{data.label}</span>
-    </div>
-  );
-}
-
-function ToolNode({ data }: { data: any }) {
-  return (
-    <div className={`node tool-node ${data.status}`}>
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-      <div className="node-header">
-        <Cpu size={16} />
-        <span className="node-title">{data.toolName}</span>
-        <span className={`node-status ${data.status}`}>
-          {data.status === 'success' && <CheckCircle size={14} />}
-          {data.status === 'error' && <XCircle size={14} />}
-        </span>
-      </div>
-      {data.duration && (
-        <div className="node-meta">{data.duration}</div>
-      )}
-    </div>
-  );
-}
-
-function DecisionNode({ data }: { data: any }) {
-  return (
-    <div className="node decision-node">
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} id="yes" />
-      <Handle type="source" position={Position.Right} id="no" />
-      <GitBranch size={18} />
-      <span>{data.label}</span>
-    </div>
-  );
-}
-
-function EndNode({ data }: { data: any }) {
-  return (
-    <div className={`node end-node ${data.status}`}>
-      <Handle type="target" position={Position.Top} />
-      {data.status === 'success' && <CheckCircle size={20} />}
-      {data.status === 'error' && <XCircle size={20} />}
-      <span>{data.label}</span>
-    </div>
-  );
+interface FlowNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: {
+    label: string;
+    toolName: string;
+    status: string;
+    duration?: number;
+  };
+  style?: React.CSSProperties;
 }
 
 const nodeTypes = {
-  start: StartNode,
   tool: ToolNode,
-  decision: DecisionNode,
+  start: StartNode,
   end: EndNode
 };
 
-export function DecisionGraphTab({ session, toolCalls = [] }: Props) {
-  // Build nodes and edges from tool calls
-  const { initialNodes, initialEdges } = useMemo(() => {
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
-    
-    const startX = 250;
-    const startY = 50;
-    const nodeSpacing = 120;
-    
-    // Start node
-    nodes.push({
-      id: 'start',
-      type: 'start',
-      position: { x: startX, y: startY },
-      data: { label: 'Session Start' }
-    });
-    
-    // Tool nodes
-    const sortedCalls = [...toolCalls].sort((a, b) => 
-      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-    );
-    
-    sortedCalls.forEach((call, index) => {
-      const nodeId = `tool-${call.id}`;
-      const prevId = index === 0 ? 'start' : `tool-${sortedCalls[index - 1].id}`;
-      
-      nodes.push({
-        id: nodeId,
-        type: 'tool',
-        position: { 
-          x: startX + (index % 2 === 0 ? 0 : 200), 
-          y: startY + (index + 1) * nodeSpacing 
-        },
-        data: {
-          toolName: call.toolName,
-          status: call.status,
-          duration: call.durationMs ? `${call.durationMs}ms` : null
-        }
-      });
-      
-      edges.push({
-        id: `edge-${prevId}-${nodeId}`,
-        source: prevId,
-        target: nodeId,
-        animated: call.status === 'running',
-        style: { 
-          stroke: call.status === 'error' ? '#ef4444' : '#22d3ee',
-          strokeWidth: 2
-        }
-      });
-    });
-    
-    // End node
-    const lastCall = sortedCalls[sortedCalls.length - 1];
-    const endY = startY + (sortedCalls.length + 1) * nodeSpacing;
-    
-    nodes.push({
-      id: 'end',
-      type: 'end',
-      position: { x: startX, y: endY },
-      data: { 
-        label: session.status === 'running' ? 'Running...' : 'Session End',
-        status: session.status === 'failed' ? 'error' : 'success'
-      }
-    });
-    
-    if (lastCall) {
-      edges.push({
-        id: `edge-tool-${lastCall.id}-end`,
-        source: `tool-${lastCall.id}`,
-        target: 'end',
-        animated: session.status === 'running',
-        style: { 
-          stroke: session.status === 'failed' ? '#ef4444' : '#10b981',
-          strokeWidth: 2
-        }
-      });
-    } else {
-      edges.push({
-        id: 'edge-start-end',
-        source: 'start',
-        target: 'end',
-        style: { stroke: '#22d3ee', strokeWidth: 2 }
-      });
-    }
-    
-    return { initialNodes: nodes, initialEdges: edges };
-  }, [toolCalls, session]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  // Update nodes when data changes
-  React.useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
-
-  const onConnect = useCallback(
-    (params: any) => setEdges((eds) => [...eds, params]),
-    [setEdges]
+function StartNode({ data }: any) {
+  return (
+    <div className="flow-node start-node">
+      <Handle type="source" position={Position.Bottom} />
+      <div className="node-content">
+        <div className="node-icon">🚀</div>
+        <div className="node-label">{data.label}</div>
+      </div>
+    </div>
   );
+}
 
-  const formatDuration = (ms?: number) => {
-    if (!ms) return 'N/A';
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
+function EndNode({ data }: any) {
+  return (
+    <div className="flow-node end-node">
+      <Handle type="target" position={Position.Top} />
+      <div className="node-content">
+        <div className="node-icon">🏁</div>
+        <div className="node-label">{data.label}</div>
+      </div>
+    </div>
+  );
+}
+
+function ToolNode({ data }: any) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      case 'running': return '#22d3ee';
+      default: return '#94a3b8';
+    }
+  };
+
+  const getToolIcon = (toolName: string) => {
+    const icons: Record<string, string> = {
+      exec: '⚡',
+      write: '✏️',
+      read: '📖',
+      edit: '🔧',
+      browser: '🌐',
+      web_search: '🔍',
+      image: '🖼️',
+      tts: '🔊',
+      message: '💬',
+      nodes: '📡',
+      process: '⚙️',
+      canvas: '🎨'
+    };
+    return icons[toolName] || '🔧';
   };
 
   return (
-    <div className="decision-graph-tab">
+    <div 
+      className="flow-node tool-node"
+      style={{ borderColor: getStatusColor(data.status) }}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="node-content">
+        <div className="node-icon">{getToolIcon(data.toolName)}</div>
+        <div className="node-info">
+          <div className="node-label">{data.toolName}</div>
+          {data.duration && (
+            <div className="node-duration">{data.duration}ms</div>
+          )}
+        </div>
+        <div 
+          className="node-status" 
+          style={{ backgroundColor: getStatusColor(data.status) }}
+        />
+      </div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}
+
+export function DecisionGraphTab({ session, toolCalls = [] }: Props) {
+  const { nodes, edges } = useMemo(() => {
+    const flowNodes: FlowNode[] = [];
+    const flowEdges: Edge[] = [];
+
+    // Add start node
+    flowNodes.push({
+      id: 'start',
+      type: 'start',
+      position: { x: 250, y: 0 },
+      data: { 
+        label: 'Session Start', 
+        toolName: 'start',
+        status: 'success'
+      }
+    });
+
+    // Add tool nodes
+    const sortedCalls = [...toolCalls].sort((a, b) =>
+      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+
+    const rowWidth = 200;
+    const rowHeight = 120;
+    const itemsPerRow = 3;
+
+    sortedCalls.forEach((call, index) => {
+      const row = Math.floor(index / itemsPerRow);
+      const col = index % itemsPerRow;
+      const x = 100 + col * rowWidth;
+      const y = 100 + row * rowHeight;
+
+      flowNodes.push({
+        id: call.id,
+        type: 'tool',
+        position: { x, y },
+        data: {
+          label: call.toolName,
+          toolName: call.toolName,
+          status: call.status,
+          duration: call.durationMs
+        }
+      });
+
+      // Connect to previous node
+      if (index === 0) {
+        flowEdges.push({
+          id: `e-start-${call.id}`,
+          source: 'start',
+          target: call.id,
+          animated: call.status === 'running',
+          style: { stroke: '#64748b' }
+        });
+      } else {
+        flowEdges.push({
+          id: `e-${sortedCalls[index - 1].id}-${call.id}`,
+          source: sortedCalls[index - 1].id,
+          target: call.id,
+          animated: call.status === 'running',
+          style: { stroke: '#64748b' }
+        });
+      }
+    });
+
+    // Add end node
+    const lastRow = Math.floor((sortedCalls.length - 1) / itemsPerRow);
+    flowNodes.push({
+      id: 'end',
+      type: 'end',
+      position: { 
+        x: 250, 
+        y: 150 + (lastRow + 1) * rowHeight 
+      },
+      data: { 
+        label: session.status === 'completed' ? 'Completed' : 
+               session.status === 'failed' ? 'Failed' : 'In Progress',
+        toolName: 'end',
+        status: session.status
+      }
+    });
+
+    // Connect last tool to end
+    if (sortedCalls.length > 0) {
+      flowEdges.push({
+        id: `e-${sortedCalls[sortedCalls.length - 1].id}-end`,
+        source: sortedCalls[sortedCalls.length - 1].id,
+        target: 'end',
+        animated: session.status === 'running',
+        style: { 
+          stroke: session.status === 'completed' ? '#10b981' : 
+                  session.status === 'failed' ? '#ef4444' : '#64748b'
+        }
+      });
+    }
+
+    return { nodes: flowNodes, edges: flowEdges };
+  }, [toolCalls, session.status]);
+
+  if (toolCalls.length === 0) {
+    return (
+      <div className="graph-tab">
+        <div className="empty-state">
+          <div className="empty-icon">🕸️</div>
+          <p>No tool calls to visualize</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="graph-tab">
       <div className="graph-header">
-        <div className="graph-title">
-          <GitBranch size={18} />
-          <h3>Decision Flow</h3>
-          <span className="graph-subtitle">
-            {toolCalls.length} steps · {formatDuration(
-              toolCalls.reduce((sum, c) => sum + (c.durationMs || 0), 0)
-            )} total
+        <h3>Execution Flow</h3>
+        <div className="graph-legend">
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#10b981' }} />
+            Success
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#ef4444' }} />
+            Error
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot" style={{ background: '#22d3ee' }} />
+            Running
           </span>
         </div>
       </div>
-
+      
       <div className="graph-container">
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
           nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
-          minZoom={0.2}
-          maxZoom={2}
+          attributionPosition="bottom-left"
         >
           <Background color="#334155" gap={16} />
           <Controls />
@@ -226,26 +256,7 @@ export function DecisionGraphTab({ session, toolCalls = [] }: Props) {
             nodeStrokeWidth={3}
             zoomable
             pannable
-            style={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155'
-            }}
           />
-          
-          <Panel position="top-right" className="graph-legend">
-            <div className="legend-item">
-              <span className="legend-dot success" />
-              <span>Success</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot error" />
-              <span>Error</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot running" />
-              <span>Running</span>
-            </div>
-          </Panel>
         </ReactFlow>
       </div>
     </div>
