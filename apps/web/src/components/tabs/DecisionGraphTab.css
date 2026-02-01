@@ -1,0 +1,238 @@
+/* DecisionGraphTab styles */
+.decision-graph-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 16px;
+}
+
+.graph-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.graph-title h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.graph-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-left: 12px;
+  border-left: 1px solid var(--border-color);
+}
+
+.graph-container {
+  flex: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+}
+
+/* React Flow Customization */
+.graph-container .react-flow {
+  background-color: var(--bg-primary);
+}
+
+.graph-container .react-flow__node {
+  border: none;
+  padding: 0;
+}
+
+.graph-container .react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.graph-container .react-flow__minimap {
+  border-radius: 8px;
+}
+
+/* Custom Nodes */
+.node {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.start-node {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-radius: 30px;
+}
+
+.tool-node {
+  background-color: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  color: var(--text-primary);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.tool-node.success {
+  border-color: #10b981;
+}
+
+.tool-node.error {
+  border-color: #ef4444;
+}
+
+.tool-node.running {
+  border-color: #22d3ee;
+  animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #22d3ee; }
+  50% { border-color: #0891b2; }
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.node-status {
+  display: flex;
+  align-items: center;
+}
+
+.node-status.success {
+  color: #10b981;
+}
+
+.node-status.error {
+  color: #ef4444;
+}
+
+.node-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-left: 24px;
+}
+
+.decision-node {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border-radius: 30px;
+  padding: 10px 20px;
+}
+
+.end-node {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  color: white;
+  border-radius: 30px;
+}
+
+.end-node.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.end-node.error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+/* Graph Legend */
+.graph-legend {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px !important;
+}
+
+.graph-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.graph-legend .legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.graph-legend .legend-dot.success {
+  background-color: #10b981;
+}
+
+.graph-legend .legend-dot.error {
+  background-color: #ef4444;
+}
+
+.graph-legend .legend-dot.running {
+  background-color: #22d3ee;
+}
+
+/* React Flow Controls */
+.react-flow__controls {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.react-flow__controls-button {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* Handle Styling */
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background-color: #22d3ee;
+  border: 2px solid var(--bg-primary);
+}
+
+.react-flow__handle-top {
+  top: -4px;
+}
+
+.react-flow__handle-bottom {
+  bottom: -4px;
+}

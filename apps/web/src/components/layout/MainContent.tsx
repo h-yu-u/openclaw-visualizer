@@ -3,11 +3,14 @@ import { useTaskStore } from '../../store';
 import { OverviewTab } from '../tabs/OverviewTab';
 import { TimelineTab } from '../tabs/TimelineTab';
 import { LogsTab } from '../tabs/LogsTab';
+import { DecisionGraphTab } from '../tabs/DecisionGraphTab';
+import { PerformanceTab } from '../tabs/PerformanceTab';
 import './MainContent.css';
 
 export function MainContent() {
-  const { activeTab, setActiveTab, getSelectedSession } = useTaskStore();
+  const { activeTab, setActiveTab, getSelectedSession, getSelectedToolCalls } = useTaskStore();
   const selectedSession = getSelectedSession();
+  const toolCalls = getSelectedToolCalls();
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -21,20 +24,28 @@ export function MainContent() {
     if (!selectedSession) {
       return (
         <div className="empty-state">
-          <p>Select a session to view details</p>
+          <div className="empty-state-content">
+            <div className="empty-icon">📊</div>
+            <h3>Welcome to OpenClaw Visualizer</h3>
+            <p>Select a session from the sidebar to view detailed analytics</p>
+          </div>
         </div>
       );
     }
 
     switch (activeTab) {
       case 'overview':
-        return <OverviewTab session={selectedSession} />;
+        return <OverviewTab session={selectedSession} toolCalls={toolCalls} />;
       case 'timeline':
-        return <TimelineTab session={selectedSession} />;
+        return <TimelineTab session={selectedSession} toolCalls={toolCalls} />;
       case 'logs':
-        return <LogsTab session={selectedSession} />;
+        return <LogsTab session={selectedSession} toolCalls={toolCalls} />;
+      case 'graph':
+        return <DecisionGraphTab session={selectedSession} toolCalls={toolCalls} />;
+      case 'performance':
+        return <PerformanceTab session={selectedSession} toolCalls={toolCalls} />;
       default:
-        return <OverviewTab session={selectedSession} />;
+        return <OverviewTab session={selectedSession} toolCalls={toolCalls} />;
     }
   };
 

@@ -1,0 +1,137 @@
+/* PerformanceTab styles */
+.performance-tab {
+  max-width: 1400px;
+}
+
+/* Stats Grid */
+.perf-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.perf-stat-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.perf-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.perf-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-tertiary);
+  color: var(--info);
+}
+
+.perf-stat-icon.cyan { color: #22d3ee; }
+.perf-stat-icon.purple { color: #a855f7; }
+.perf-stat-icon.green { color: #10b981; }
+.perf-stat-icon.orange { color: #f59e0b; }
+
+.perf-stat-content {
+  flex: 1;
+}
+
+.perf-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.perf-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Charts Grid */
+.perf-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.perf-chart-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.perf-chart-card.wide {
+  grid-column: 1 / -1;
+}
+
+.perf-chart-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.perf-chart-container {
+  position: relative;
+}
+
+.no-data {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.chart-legend-vertical {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chart-legend-vertical .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chart-legend-vertical .legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .perf-charts-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .perf-chart-card.wide {
+    grid-column: 1;
+  }
+  
+  .perf-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
