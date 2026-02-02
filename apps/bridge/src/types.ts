@@ -1,3 +1,14 @@
+// Message in a session
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: any;
+  timestamp: Date;
+  model?: string;
+  tokensIn?: number;
+  tokensOut?: number;
+}
+
 // Task Session - Top level container
 export interface TaskSession {
   id: string;
@@ -9,6 +20,7 @@ export interface TaskSession {
   totalTokensOut: number;
   estimatedCost: number;
   toolCalls: ToolCall[];
+  messages: Message[];
   channel?: string;
   userId?: string;
   agentId?: string;

@@ -82,3 +82,34 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notification-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.notification-btn.enabled {
+  color: var(--success);
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
+}

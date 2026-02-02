@@ -1,13 +1,15 @@
 import React from 'react';
-import { Wifi, WifiOff, Loader2, Server } from 'lucide-react';
+import { Wifi, WifiOff, Loader2, Server, RefreshCw } from 'lucide-react';
 import './GatewayStatus.css';
 
 interface Props {
   status: 'connected' | 'disconnected' | 'connecting';
   gatewayUrl?: string;
+  reconnectAttempts?: number;
+  onReconnect?: () => void;
 }
 
-export function GatewayStatus({ status, gatewayUrl }: Props) {
+export function GatewayStatus({ status, gatewayUrl, reconnectAttempts = 0, onReconnect }: Props) {
   const getStatusConfig = () => {
     switch (status) {
       case 'connected':
@@ -20,7 +22,7 @@ export function GatewayStatus({ status, gatewayUrl }: Props) {
       case 'connecting':
         return {
           icon: Loader2,
-          label: 'Connecting...',
+          label: reconnectAttempts > 0 ? `Reconnecting #${reconnectAttempts}` : 'Connecting...',
           className: 'status-connecting',
           pulse: true
         };
@@ -28,7 +30,7 @@ export function GatewayStatus({ status, gatewayUrl }: Props) {
       default:
         return {
           icon: WifiOff,
-          label: 'Disconnected',
+          label: reconnectAttempts > 0 ? `Disconnected (${reconnectAttempts})` : 'Disconnected',
           className: 'status-disconnected',
           pulse: false
         };
@@ -46,7 +48,7 @@ export function GatewayStatus({ status, gatewayUrl }: Props) {
       />
       <span className="status-label">{config.label}</span>
       
-      {gatewayUrl && (
+      {gatewayUrl && status === 'connected' && (
         <span className="status-url" title={gatewayUrl}>
           <Server size={12} />
           {(() => {
@@ -57,6 +59,16 @@ export function GatewayStatus({ status, gatewayUrl }: Props) {
             }
           })()}
         </span>
+      )}
+      
+      {status === 'disconnected' && onReconnect && (
+        <button 
+          className="reconnect-btn"
+          onClick={onReconnect}
+          title="Reconnect now"
+        >
+          <RefreshCw size={12} />
+        </button>
       )}
     </div>
   );

@@ -1,10 +1,25 @@
 import React from 'react';
+import { Bell, BellOff } from 'lucide-react';
 import { useTaskStore } from '../../store';
 import { GatewayStatus } from '../GatewayStatus';
 import './Header.css';
 
-export function Header() {
-  const { connectionStatus, sessions, getRunningSessions, gatewayStatus } = useTaskStore();
+interface HeaderProps {
+  connectionStatus: 'connected' | 'disconnected' | 'connecting';
+  reconnectAttempts?: number;
+  onReconnect?: () => void;
+  notificationsEnabled?: boolean;
+  onToggleNotifications?: () => void;
+}
+
+export function Header({ 
+  connectionStatus, 
+  reconnectAttempts = 0, 
+  onReconnect,
+  notificationsEnabled,
+  onToggleNotifications
+}: HeaderProps) {
+  const { sessions, getRunningSessions, gatewayStatus } = useTaskStore();
   const runningCount = getRunningSessions().length;
 
   return (
@@ -32,13 +47,22 @@ export function Header() {
       </div>
       
       <div className="header-right">
+        {onToggleNotifications && (
+          <button 
+            className={`notification-btn ${notificationsEnabled ? 'enabled' : 'disabled'}`}
+            onClick={onToggleNotifications}
+            title={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
+          >
+            {notificationsEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+          </button>
+        )}
         <div className="status-group">
-          {gatewayStatus && (
-            <GatewayStatus 
-              status={gatewayStatus.state as any} 
-              gatewayUrl={gatewayStatus.url}
-            />
-          )}
+          <GatewayStatus 
+            status={connectionStatus} 
+            gatewayUrl={gatewayStatus?.url}
+            reconnectAttempts={reconnectAttempts}
+            onReconnect={onReconnect}
+          />
         </div>
       </div>
     </header>

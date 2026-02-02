@@ -5,15 +5,18 @@ import { TimelineTab } from '../tabs/TimelineTab';
 import { LogsTab } from '../tabs/LogsTab';
 import { DecisionGraphTab } from '../tabs/DecisionGraphTab';
 import { PerformanceTab } from '../tabs/PerformanceTab';
+import { MessagesTab } from '../tabs/MessagesTab';
 import './MainContent.css';
 
 export function MainContent() {
-  const { activeTab, setActiveTab, getSelectedSession, getSelectedToolCalls } = useTaskStore();
+  const { activeTab, setActiveTab, getSelectedSession, getSelectedToolCalls, getSelectedMessages } = useTaskStore();
   const selectedSession = getSelectedSession();
   const toolCalls = getSelectedToolCalls();
+  const messages = getSelectedMessages();
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
+    { id: 'messages', label: 'Messages' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'logs', label: 'Logs' },
     { id: 'graph', label: 'Graph' },
@@ -36,6 +39,8 @@ export function MainContent() {
     switch (activeTab) {
       case 'overview':
         return <OverviewTab session={selectedSession} toolCalls={toolCalls} />;
+      case 'messages':
+        return <MessagesTab messages={messages} />;
       case 'timeline':
         return <TimelineTab session={selectedSession} toolCalls={toolCalls} />;
       case 'logs':

@@ -3,6 +3,16 @@ import { createReadStream, watch, existsSync, readdirSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { createInterface } from 'readline';
 
+interface MessageData {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: any;
+  timestamp: number;
+  model?: string;
+  tokensIn?: number;
+  tokensOut?: number;
+}
+
 interface SessionData {
   id: string;
   name: string;
@@ -15,6 +25,7 @@ interface SessionData {
   agentId?: string;
   channel?: string;
   toolCalls: ToolCallData[];
+  messages: MessageData[];
 }
 
 interface ToolCallData {
@@ -146,7 +157,8 @@ export class OpenClawFileWatcher extends EventEmitter {
         totalTokensIn: 0,
         totalTokensOut: 0,
         estimatedCost: 0,
-        toolCalls: []
+        toolCalls: [],
+        messages: []
       };
       this.sessions.set(sessionId, session);
     }
@@ -162,6 +174,27 @@ export class OpenClawFileWatcher extends EventEmitter {
           const usage = event.message.usage;
           session.totalTokensIn += usage.input || 0;
           session.totalTokensOut += usage.output || 0;
+        }
+
+        // Capture LLM message content (not tool calls)
+        if (event.message?.role && event.message.role !== 'tool') {
+          const message: MessageData = {
+            id: `${sessionId}-${event.timestamp}`,
+            role: event.message.role,
+            content: event.message.content,
+            timestamp: new Date(event.timestamp).getTime(),
+            model: event.message.model,
+            tokensIn: event.message.usage?.input,
+            tokensOut: event.message.usage?.output
+          };
+          
+          // Check if we already have this message
+          const existingIndex = session.messages.findIndex(m => m.id === message.id);
+          if (existingIndex === -1) {
+            session.messages.push(message);
+            this.emit('message', { sessionId, message });
+            console.log('[FileWatcher] Message captured:', message.role, message.id);
+          }
         }
 
         // Process tool calls from message content
@@ -283,6 +316,26 @@ export class OpenClawFileWatcher extends EventEmitter {
   getToolCalls(sessionId: string): ToolCallData[] {
     return this.sessions.get(sessionId)?.toolCalls || [];
   }
+
+  getMessages(sessionId: string): MessageData[] {
+    return this.sessions.get(sessionId)?.messages || [];
+  }
+
+  // Load historical sessions from database
+  loadHistoricalSessions(sessions: SessionData[]): void {
+    for (const session of sessions) {
+      // Only add if not already in memory (file watcher takes precedence for active sessions)
+      if (!this.sessions.has(session.id)) {
+        this.sessions.set(session.id, session);
+      }
+    }
+    console.log(`[FileWatcher] Loaded ${sessions.length} historical sessions from database`);
+  }
+
+  // Get all sessions including historical ones
+  getAllSessions(): SessionData[] {
+    return Array.from(this.sessions.values()).sort((a, b) => b.startTime - a.startTime);
+  }
 }
 
-export type { SessionData, ToolCallData };
+export type { SessionData, ToolCallData, MessageData };

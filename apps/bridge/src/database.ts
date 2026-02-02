@@ -120,6 +120,7 @@ export class DatabaseManager {
       totalTokensOut: row.total_tokens_out,
       estimatedCost: row.estimated_cost,
       toolCalls: [],
+      messages: [],
       channel: row.channel,
       userId: row.user_id,
       agentId: row.agent_id

@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { TaskSession, ToolCall } from '../../types';
-import { TrendingUp, DollarSign, Clock, Activity, BarChart3 } from 'lucide-react';
+import { TrendingUp, DollarSign, Clock, Activity, BarChart3, Zap, Hash, Percent, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line
@@ -13,6 +13,16 @@ interface Props {
 }
 
 const COLORS = ['#22d3ee', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#3b82f6'];
+
+interface ToolStats {
+  name: string;
+  count: number;
+  totalTokens: number;
+  avgTokens: number;
+  avgDuration: number;
+  successRate: number;
+  totalCost: number;
+}
 
 export function PerformanceTab({ session, toolCalls = [] }: Props) {
   // Token usage over time (simulated cumulative data)
@@ -140,6 +150,65 @@ export function PerformanceTab({ session, toolCalls = [] }: Props) {
   const formatDuration = (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  // Tool statistics table data
+  const toolStatsTable: ToolStats[] = useMemo(() => {
+    const stats: Record<string, ToolStats> = {};
+
+    toolCalls.forEach(call => {
+      if (!stats[call.toolName]) {
+        stats[call.toolName] = {
+          name: call.toolName,
+          count: 0,
+          totalTokens: 0,
+          avgTokens: 0,
+          avgDuration: 0,
+          successRate: 0,
+          totalCost: 0
+        };
+      }
+      const s = stats[call.toolName];
+      s.count++;
+      s.totalTokens += (call.tokensIn || 0) + (call.tokensOut || 0);
+      s.avgDuration += call.durationMs || 0;
+      if (call.status === 'success') s.successRate++;
+    });
+
+    // Calculate averages
+    const totalTokensAll = Object.values(stats).reduce((sum, s) => sum + s.totalTokens, 0);
+
+    return Object.values(stats).map(s => ({
+      ...s,
+      avgTokens: Math.round(s.totalTokens / s.count),
+      avgDuration: Math.round(s.avgDuration / s.count),
+      successRate: Math.round((s.successRate / s.count) * 100),
+      totalCost: totalTokensAll > 0
+        ? (session.estimatedCost * (s.totalTokens / totalTokensAll))
+        : 0
+    })).sort((a, b) => b.count - a.count);
+  }, [toolCalls, session]);
+
+  const [sortConfig, setSortConfig] = useState<{ key: keyof ToolStats; direction: 'asc' | 'desc' } | null>(null);
+
+  const sortedToolStats = useMemo(() => {
+    if (!sortConfig) return toolStatsTable;
+    return [...toolStatsTable].sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [toolStatsTable, sortConfig]);
+
+  const handleSort = (key: keyof ToolStats) => {
+    setSortConfig(current => {
+      if (!current || current.key !== key) {
+        return { key, direction: 'desc' };
+      }
+      return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+    });
   };
 
   return (
@@ -370,6 +439,62 @@ export function PerformanceTab({ session, toolCalls = [] }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Tool Statistics Table */}
+      {toolStatsTable.length > 0 && (
+        <div className="perf-table-section">
+          <h4 className="perf-table-title">
+            <BarChart3 size={16} />
+            Tool Call Statistics
+          </h4>
+          <div className="perf-table-container">
+            <table className="perf-table">
+              <thead>
+                <tr>
+                  <th onClick={() => handleSort('name')} className="sortable">
+                    Tool {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                  <th onClick={() => handleSort('count')} className="sortable numeric">
+                    <Hash size={14}/> Calls {sortConfig?.key === 'count' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                  <th onClick={() => handleSort('totalTokens')} className="sortable numeric">
+                    <Zap size={14}/> Total Tokens {sortConfig?.key === 'totalTokens' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                  <th onClick={() => handleSort('avgTokens')} className="sortable numeric">
+                    Avg Tokens {sortConfig?.key === 'avgTokens' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                  <th onClick={() => handleSort('avgDuration')} className="sortable numeric">
+                    <Clock size={14}/> Avg Duration {sortConfig?.key === 'avgDuration' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                  <th onClick={() => handleSort('successRate')} className="sortable numeric">
+                    <Percent size={14}/> Success {sortConfig?.key === 'successRate' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                  <th onClick={() => handleSort('totalCost')} className="sortable numeric">
+                    <DollarSign size={14}/> Cost {sortConfig?.key === 'totalCost' && (sortConfig.direction === 'asc' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>)}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedToolStats.map(tool => (
+                  <tr key={tool.name}>
+                    <td className="tool-name">{tool.name}</td>
+                    <td className="numeric">{tool.count}</td>
+                    <td className="numeric">{tool.totalTokens.toLocaleString()}</td>
+                    <td className="numeric">{tool.avgTokens.toLocaleString()}</td>
+                    <td className="numeric">{formatDuration(tool.avgDuration)}</td>
+                    <td className="numeric">
+                      <span className={`success-rate ${tool.successRate >= 90 ? 'high' : tool.successRate >= 50 ? 'medium' : 'low'}`}>
+                        {tool.successRate}%
+                      </span>
+                    </td>
+                    <td className="numeric">${tool.totalCost.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

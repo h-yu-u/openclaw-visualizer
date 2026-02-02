@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { DatabaseManager } from './database.js';
-import { OpenClawFileWatcher, SessionData, ToolCallData } from './file-watcher.js';
+import { OpenClawFileWatcher, SessionData, ToolCallData, MessageData } from './file-watcher.js';
 import { ClientCommand, ServerEvent } from './types.js';
 
 const BRIDGE_PORT = parseInt(process.env.BRIDGE_PORT || '3001');
@@ -137,6 +137,15 @@ fileWatcher.on('tool_update', ({ sessionId, toolCall }: { sessionId: string; too
   });
 });
 
+fileWatcher.on('message', ({ sessionId, message }: { sessionId: string; message: MessageData }) => {
+  // Broadcast to clients
+  broadcast({
+    type: 'MESSAGE',
+    sessionId,
+    data: convertMessage(message)
+  });
+});
+
 // Handle commands from browser clients
 async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promise<void> {
   switch (command.type) {
@@ -146,8 +155,25 @@ async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promi
     
     case 'GET_TOOL_CALLS':
       if (command.sessionId) {
-        const calls = db.getToolCalls(command.sessionId);
-        sendToClient(ws, { type: 'TOOL_CALLS', sessionId: command.sessionId, data: calls });
+        // First check live file watcher sessions (for active sessions)
+        const liveCalls = fileWatcher.getToolCalls(command.sessionId);
+        if (liveCalls.length > 0) {
+          // Active session - use live data
+          const convertedCalls = liveCalls.map(tc => convertToolCall(tc, command.sessionId!));
+          sendToClient(ws, { type: 'TOOL_CALLS', sessionId: command.sessionId, data: convertedCalls });
+        } else {
+          // Historical session - load from database
+          const calls = db.getToolCalls(command.sessionId);
+          sendToClient(ws, { type: 'TOOL_CALLS', sessionId: command.sessionId, data: calls });
+        }
+      }
+      break;
+    
+    case 'GET_MESSAGES':
+      if (command.sessionId) {
+        const liveMessages = fileWatcher.getMessages(command.sessionId);
+        const convertedMessages = liveMessages.map(m => convertMessage(m));
+        sendToClient(ws, { type: 'MESSAGES', sessionId: command.sessionId, data: convertedMessages });
       }
       break;
     
@@ -177,11 +203,28 @@ async function handleClientCommand(ws: WebSocket, command: ClientCommand): Promi
 }
 
 function sendSessions(ws: WebSocket): void {
-  // Get sessions from file watcher (has live tool calls data)
-  const fileSessions = fileWatcher.getSessions();
+  // Get all sessions including historical ones from database
+  const allSessions = fileWatcher.getAllSessions();
   
-  // Convert and sort sessions
-  const sessions = fileSessions.map(convertSession).sort((a, b) => 
+  // For sessions that are currently active in file watcher, merge with real-time tool calls
+  const enrichedSessions = allSessions.map(session => {
+    const liveSession = fileWatcher.getSession(session.id);
+    if (liveSession) {
+      // Merge live data with stored data
+      return {
+        ...session,
+        toolCalls: liveSession.toolCalls,
+        totalTokensIn: liveSession.totalTokensIn || session.totalTokensIn,
+        totalTokensOut: liveSession.totalTokensOut || session.totalTokensOut,
+        estimatedCost: liveSession.estimatedCost || session.estimatedCost,
+        status: liveSession.status // Live status takes precedence
+      };
+    }
+    return session;
+  });
+  
+  // Convert and sort by start time (newest first)
+  const sessions = enrichedSessions.map(convertSession).sort((a, b) => 
     new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
   );
   
@@ -217,7 +260,8 @@ function convertSession(session: SessionData): any {
     estimatedCost: session.estimatedCost,
     agentId: session.agentId,
     channel: session.channel,
-    toolCalls: session.toolCalls.map(tc => convertToolCall(tc, session.id))
+    toolCalls: session.toolCalls.map(tc => convertToolCall(tc, session.id)),
+    messages: session.messages?.map(m => convertMessage(m)) || []
   };
 }
 
@@ -229,16 +273,57 @@ function convertToolCall(tc: ToolCallData, sessionId: string): any {
     status: tc.status,
     startTime: new Date(tc.startTime),
     endTime: tc.endTime ? new Date(tc.endTime) : undefined,
-    input: tc.parameters,
-    output: tc.result,
+    parameters: tc.parameters,
+    result: tc.result,
     error: tc.error,
     tokensIn: tc.tokensIn,
     tokensOut: tc.tokensOut
   };
 }
 
+function convertMessage(m: MessageData): any {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    timestamp: new Date(m.timestamp),
+    model: m.model,
+    tokensIn: m.tokensIn,
+    tokensOut: m.tokensOut
+  };
+}
+
+// Load historical sessions from database on startup
+function loadHistoricalSessions(): void {
+  try {
+    const historicalSessions = db.getSessions(100); // Get last 100 sessions
+    const convertedSessions: SessionData[] = historicalSessions.map(session => ({
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      startTime: session.startTime.getTime(),
+      endTime: session.endTime?.getTime(),
+      totalTokensIn: session.totalTokensIn || 0,
+      totalTokensOut: session.totalTokensOut || 0,
+      estimatedCost: session.estimatedCost || 0,
+      agentId: session.agentId,
+      channel: session.channel,
+      toolCalls: [], // Tool calls will be loaded on demand
+      messages: []   // Messages will be loaded on demand
+    }));
+    
+    fileWatcher.loadHistoricalSessions(convertedSessions);
+    console.log(`📚 Loaded ${convertedSessions.length} historical sessions from database`);
+  } catch (err) {
+    console.error('[Bridge] Error loading historical sessions:', err);
+  }
+}
+
 // Start file watcher
 fileWatcher.start();
+
+// Load historical data
+loadHistoricalSessions();
 
 console.log(`✅ Bridge Server ready!`);
 console.log(`🌐 WebSocket: ws://localhost:${BRIDGE_PORT}`);

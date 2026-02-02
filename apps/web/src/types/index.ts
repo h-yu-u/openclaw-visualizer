@@ -1,3 +1,13 @@
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: any;
+  timestamp: Date;
+  model?: string;
+  tokensIn?: number;
+  tokensOut?: number;
+}
+
 export interface TaskSession {
   id: string;
   name: string;
@@ -8,6 +18,7 @@ export interface TaskSession {
   totalTokensOut: number;
   estimatedCost: number;
   toolCalls: ToolCall[];
+  messages: Message[];
   channel?: string;
   userId?: string;
   agentId?: string;
@@ -31,4 +42,4 @@ export interface ToolCall {
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 
-export type TabType = 'overview' | 'timeline' | 'logs' | 'graph' | 'performance';
+export type TabType = 'overview' | 'messages' | 'timeline' | 'logs' | 'graph' | 'performance';
