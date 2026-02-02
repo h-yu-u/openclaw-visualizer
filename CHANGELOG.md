@@ -1,4 +1,29 @@
-# OpenClaw Visualizer 修复记录
+# OpenClaw Visualizer Changelog
+
+## 2026-02-02 - Phase 1 & 2 Complete
+
+### Phase 1: Core Experience Improvements
+- **WebSocket Status Fix**: Connection status now correctly displays frontend-bridge status
+- **Auto-Reconnect**: Exponential backoff (1s→2s→4s... max 30s), heartbeat detection, manual reconnect button
+- **Browser Notifications**: Desktop alerts for new sessions and completions with toggle switch
+
+### Phase 2: Data Visualization Enhancement
+- **MessagesTab**: New tab showing LLM conversation flow
+  - Role indicators (user/assistant/system with color coding)
+  - Model name, token usage, timestamps
+  - Auto-collapse for long messages
+- **PerformanceTab Enhancements**:
+  - Real-time token usage area chart
+  - Token efficiency per tool call
+  - Sortable tool statistics table (calls, tokens, duration, success rate, cost)
+  - Success rate indicators (green/yellow/red)
+
+### Backend Improvements
+- **Message Capture**: file-watcher.ts now captures LLM messages from jsonl
+- **Database Persistence**: Historical sessions and tool calls persist across restarts
+- **WebSocket Events**: Added MESSAGE and MESSAGES event types
+
+---
 
 ## 日期：2026-02-01
 
