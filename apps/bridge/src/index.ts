@@ -119,6 +119,7 @@ fileWatcher.on('tool_update', ({ sessionId, toolCall }: { sessionId: string; too
   db.updateToolCall(toolCall.id, sessionId, {
     status: toolCall.status,
     endTime: toolCall.endTime ? new Date(toolCall.endTime) : undefined,
+    durationMs: toolCall.durationMs,
     result: toolCall.result,
     error: toolCall.error
   });

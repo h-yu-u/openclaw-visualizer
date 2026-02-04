@@ -34,6 +34,7 @@ interface ToolCallData {
   status: 'pending' | 'running' | 'success' | 'error';
   startTime: number;
   endTime?: number;
+  durationMs?: number;
   parameters?: any;
   result?: any;
   error?: string;
@@ -229,11 +230,12 @@ export class OpenClawFileWatcher extends EventEmitter {
               if (existingCall) {
                 existingCall.status = content.error ? 'error' : 'success';
                 existingCall.endTime = new Date(event.timestamp).getTime();
+                existingCall.durationMs = existingCall.endTime - existingCall.startTime;
                 existingCall.result = content.result || content.output || content.content;
                 existingCall.error = content.error;
                 this.pendingToolCalls.delete(toolCallId);
                 this.emit('tool_update', { sessionId, toolCall: existingCall });
-                console.log('[FileWatcher] Tool result detected:', existingCall.toolName, toolCallId);
+                console.log('[FileWatcher] Tool result detected:', existingCall.toolName, toolCallId, 'duration:', existingCall.durationMs + 'ms');
               }
             }
           }
@@ -254,11 +256,12 @@ export class OpenClawFileWatcher extends EventEmitter {
             if (existingCall) {
               existingCall.status = content.error ? 'error' : 'success';
               existingCall.endTime = new Date(event.timestamp).getTime();
+              existingCall.durationMs = existingCall.endTime - existingCall.startTime;
               existingCall.result = content.result || content.content || content.text;
               existingCall.error = content.error;
               this.pendingToolCalls.delete(toolCallId);
               this.emit('tool_update', { sessionId, toolCall: existingCall });
-              console.log('[FileWatcher] Tool result from user message:', existingCall.toolName, toolCallId);
+              console.log('[FileWatcher] Tool result from user message:', existingCall.toolName, toolCallId, 'duration:', existingCall.durationMs + 'ms');
             }
           }
         }
@@ -291,10 +294,12 @@ export class OpenClawFileWatcher extends EventEmitter {
         if (call) {
           call.status = event.error ? 'error' : 'success';
           call.endTime = new Date(event.timestamp).getTime();
+          call.durationMs = call.endTime - call.startTime;
           call.result = event.result;
           call.error = event.error;
           this.pendingToolCalls.delete(event.id);
           this.emit('tool_update', { sessionId, toolCall: call });
+          console.log('[FileWatcher] Tool result (legacy):', call.toolName, event.id, 'duration:', call.durationMs + 'ms');
         }
         break;
 
